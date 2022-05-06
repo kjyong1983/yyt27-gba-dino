@@ -1,0 +1,12 @@
+{
+    "files.associations": {
+        "logotest.h": "c",
+        "trex.h": "c",
+        "obstacle-large.h": "c",
+        "obstacle-small.h": "c",
+        "horizon.h": "c",
+        "gfx.h": "c",
+        "stdio.h": "c",
+        "tonc_input.h": "c"
+    }
+}
