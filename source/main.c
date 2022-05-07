@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <tonc.h>
 
@@ -7,8 +8,6 @@
 
 // sprite
 #include "sprite.h"
-
-// #include "whitemap.h"
 
 #define _countof(_Array) (sizeof(_Array) / sizeof(_Array[0]))
 
@@ -20,24 +19,23 @@ typedef struct CollisionBox
 	int h;
 } CollisionBox;
 
-// typedef struct Entity
-// {
-//     int px;
-//     int py;
+typedef struct Entity
+{
+    int px;
+    int py;
 
-//     int sx;
-//     int sy;
+    int sx;
+    int sy;
 
-// 	CollisionBox col;
-// 	int speed;
+	CollisionBox* col;
+	int speed;
 
-// 	OBJ_ATTR* sprite;
-// 	u32 tileId;
-// 	u32 palBank;
-// } Entity;
+	OBJ_ATTR* sprite;
+	int* tid;
+	// u32 palBank;
+} Entity;
 
 OBJ_ATTR obj_buffer[128];
-
 
 // trex
 const int offMod = 16;
@@ -49,6 +47,8 @@ OBJ_ATTR trex[2] =
 	{ATTR0_SQUARE, ATTR1_SIZE_32x32, 0, offMod * 3} // body: 48, 64, 80
 };
 
+int trex_tid[2] = {0 , offMod * 3};
+
 OBJ_ATTR obs_small[4] =
 {
 	{ATTR0_SQUARE, ATTR1_SIZE_32x32, 0, offMod * 6}, // 96
@@ -56,6 +56,14 @@ OBJ_ATTR obs_small[4] =
 	{ATTR0_SQUARE, ATTR1_SIZE_32x32, 0, offMod * 8}, // 128
 	{ATTR0_SQUARE, ATTR1_SIZE_32x32, 0, offMod * 9}  // 144
 };
+
+Entity e_trex;
+
+int span = 400;
+int min_span = 2;
+int max_span = 6;
+// add random space when go to right
+int cur_obs[4] = {1000, 1700, 3000, 4200};
 
 // empty: 160, 176
 
@@ -74,8 +82,14 @@ OBJ_ATTR obs_large[6] =
 bool isPlaying = false;
 bool isCrashed = false;
 
+// trex pos
 float x = 30;
 float y = 140;
+
+CollisionBox trexCol;
+
+CollisionBox obj_smallCol;
+CollisionBox obj_largeCol;
 
 int ground = 140;
 
@@ -89,6 +103,10 @@ const int headXOffset = 10;
 const int headYOffset = -32;
 
 const int obsLargeYOffset = 32;
+
+float gameSpeed = 0.0f;
+int testSpeed = 3;
+float MAX_GAME_SPEED = 20.0f;
 
 // physics
 bool CheckCollision(CollisionBox a, CollisionBox b);
@@ -106,6 +124,21 @@ void Update();
 
 // void GameOver();
 
+int getRandom(int min, int max)
+{
+	return rand() % max + min;
+}
+
+void update_e_trex()
+{
+
+	e_trex.col->x = e_trex.px;
+	e_trex.col->y = e_trex.py;
+	e_trex.col->w = e_trex.sx;
+	e_trex.col->h = e_trex.sy;
+
+}
+
 void init_sprite()
 {
 	oam_init(obj_buffer, 128);
@@ -114,6 +147,19 @@ void init_sprite()
 	memcpy(pal_obj_mem, spritePal, spritePalLen);
 
 	trex[1].attr2 = bodySprOffset;
+
+	// e_trex.px = x;
+	// e_trex.py = y;
+	// e_trex.sx = 16;
+	// e_trex.sy = 32;
+
+	// e_trex.tid = trex_tid;
+
+	// update_e_trex();
+
+	// e_trex.sprite = &trex;
+	// e_trex.tid = &trex_tid;
+	// e_trex.sprite[1].attr2 = e_trex.tid[1];
 
 	obs_small[0].attr2 = offMod * 6;
 	obs_small[1].attr2 = offMod * 7;
@@ -141,7 +187,7 @@ int main()
 // 	REG_DISPCNT= DCNT_MODE0 | DCNT_BG0;
 
 // 	// Init BG 0 for text on screen entries.
-	tte_init_se_default(0, BG_CBB(0)|BG_SBB(31));
+	// tte_init_se_default(0, BG_CBB(0)|BG_SBB(31));
 
 	// tte_write("#{P:72,64}");		// Goto (72, 64).
 	// tte_write("Hello World!");		// Print "Hello world!"
@@ -155,35 +201,53 @@ int main()
 
 		Update();
 
-		tte_write("#{P:72,64}");		// Goto (72, 64).
-		tte_write("Hello World!");		// Print "Hello world!"
+		// tte_write("#{P:72,64}");		// Goto (72, 64).
+		// tte_write("Hello World!");		// Print "Hello world!"
 
 	}
 
 	return 0;
 }
 
+CollisionBox testCol = 
+{
+	0, 100, 32, 32
+};
+
 void debugTrex()
 {
 	// move left/right
 	x += 2*key_tri_horz();
+	// e_trex.px += 2*key_tri_horz();
 
 	// move up/down
 	y += 2*key_tri_vert();
+	// e_trex.py += 2*key_tri_vert();
 
 	// 0 16 32 
-	if(key_hit(KEY_R))
-		trex[0].attr2 += 16;
+	// if(key_hit(KEY_R))
+	// 	trex[0].attr2 += 16;
 
-	if(key_hit(KEY_L))
-		trex[0].attr2 -= 16;
+	// if(key_hit(KEY_L))
+	// 	trex[0].attr2 -= 16;
 
-	// 48 64 80
-	if(key_hit(KEY_A))
-		trex[1].attr2 += 16;
+	// // 48 64 80
+	// if(key_hit(KEY_A))
+	// 	trex[1].attr2 += 16;
 
-	if(key_hit(KEY_B))
-		trex[1].attr2 -= 16;
+	// if(key_hit(KEY_B))
+	// 	trex[1].attr2 -= 16;
+
+	// if(CheckCollision(*e_trex.col, testCol))
+	if(CheckCollision(trexCol, testCol))
+	{
+		// e_trex.tid = 32;
+		trex[0].attr2 = 32;
+	}
+	else
+	{
+		trex[0].attr2 = 0;
+	}
 }
 
 void debugObs()
@@ -198,7 +262,7 @@ void debugObs()
 bool isJumping = false;
 
 float dy = 0;
-float jumpPower = -6.0f;
+float jumpPower = -7.0f;
 float gravity = 0.5f;
 
 void StartJump()
@@ -214,11 +278,19 @@ void UpdateJump()
 	dy += gravity;
 }
 
+int last_rnd = 0;
+
 void Update()
 {
 	int oamCount = 0;
 
-	// debugTrex();
+	if (isCrashed)
+	{
+		gameSpeed = 0;
+	}
+	
+
+	debugTrex();
 	// debugObs();
 
 	// increment/decrement starting tile with R/L
@@ -251,20 +323,49 @@ void Update()
 	oam_copy(&obj_buffer[0], trex, _countof(trex));
 	oamCount += _countof(trex);
 
-	obj_set_pos(&obs_small[0], 100, 40);
-	obj_set_pos(&obs_small[1], 120, 40);
-	obj_set_pos(&obs_small[2], 140, 40);
-	obj_set_pos(&obs_small[3], 160, 40);
+	trexCol.x = x;
+	trexCol.y = y;
+	trexCol.w = 16;
+	trexCol.h = 32;
+
+	// how to draw trexCol?
+
+	int objPosY = 110;
+	obj_set_pos(&obs_small[0], cur_obs[0], objPosY);
+	obj_set_pos(&obs_small[1], cur_obs[1], objPosY);
+	obj_set_pos(&obs_small[2], cur_obs[2], objPosY);
+	obj_set_pos(&obs_small[3], cur_obs[3], objPosY);
+
+	for (size_t i = 0; i < _countof(cur_obs); i++)
+	{
+		cur_obs[i] -= testSpeed;
+		if (cur_obs[i] < -300)
+		{
+			// cur_obs[i] += 300;
+			// cur_obs[i] += getRandom(min_span, max_span);
+			int rnd = (random() % max_span + min_span);
+			if (rnd < 0)
+				rnd *= -1;
+
+			cur_obs[i] += 800 + span * (last_rnd + min_span + rnd);
+			last_rnd = rnd;
+		}
+		
+	}
+	
 
 	oamCount += _countof(obs_small);
 	oam_copy(&obj_buffer[2], obs_small, 4);
 
-	obj_set_pos(&obs_large[0], 100, 80);
-	obj_set_pos(&obs_large[1], 100, 80 + obsLargeYOffset);
-	obj_set_pos(&obs_large[2], 140, 80);
-	obj_set_pos(&obs_large[3], 140, 80 + obsLargeYOffset);
-	obj_set_pos(&obs_large[4], 180, 80);
-	obj_set_pos(&obs_large[5], 180, 80 + obsLargeYOffset);
+	int testLargePosX = 200;
+	int testLargePosY = 40;
+
+	obj_set_pos(&obs_large[0], testLargePosX, testLargePosY);
+	obj_set_pos(&obs_large[1], testLargePosX, testLargePosY + obsLargeYOffset);
+	obj_set_pos(&obs_large[2], testLargePosX + 60, testLargePosY);
+	obj_set_pos(&obs_large[3], testLargePosX + 60, testLargePosY + obsLargeYOffset);
+	obj_set_pos(&obs_large[4], testLargePosX + 120, testLargePosY);
+	obj_set_pos(&obs_large[5], testLargePosX + 120, testLargePosY + obsLargeYOffset);
 
 	oam_copy(&obj_buffer[oamCount], obs_large, _countof(obs_large));
 	oamCount += _countof(obs_large);
