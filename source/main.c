@@ -66,15 +66,16 @@ int max_span = 10;
 const int objPosY = 110;
 
 // add random space when go to right
-// int cur_obs[4] = {300, 600, 1200, 2400};
-u32 cur_obs[4] = {200, 400, 600, 900};
+// u32 cur_obs[4] = {100, 400, 600, 900};
+u32 default_cur_obs[4] = {400, 600, 900, 1600};
+u32 cur_obs[4] = {400, 600, 900, 1600};
 
 CollisionBox cur_obs_cols[4] = 
 {
-	{0, objPosY - 32, 16, 32},
-	{0, objPosY - 32, 16, 32},
-	{0, objPosY - 32, 16, 32},
-	{0, objPosY - 32, 16, 32}
+	{0, objPosY + 20, 16, 32},
+	{0, objPosY + 20, 16, 32},
+	{0, objPosY + 20, 16, 32},
+	{0, objPosY + 20, 16, 32}
 };
 
 // empty: 160, 176
@@ -116,8 +117,8 @@ const int headYOffset = -32;
 
 const int obsLargeYOffset = 32;
 
-float gameSpeed = 0.0f;
-int testSpeed = 3;
+// float gameSpeed = 0.0f;
+int  gameSpeed = 3;
 float MAX_GAME_SPEED = 20.0f;
 
 // physics
@@ -126,10 +127,10 @@ bool CheckCollision(CollisionBox a, CollisionBox b);
 // game logics
 
 // initialization
-void Init();
+// void Init();
 
 // game start
-// void Start();
+void Start();
 
 // game update
 void Update();
@@ -296,6 +297,18 @@ int gameTimer = 0;
 
 int body = 0;
 
+void Start()
+{
+	for (size_t i = 0; i < 4; i++)
+	{
+		cur_obs[i] = default_cur_obs[i];
+	}
+
+	isPlaying = true;
+	isCrashed = false;
+	gameSpeed = 3;
+}
+
 void Update()
 {
 	int oamCount = 0;
@@ -305,22 +318,31 @@ void Update()
 	// debugTrex();
 	// debugObs();
 
-	for (size_t i = 0; i < _countof(cur_obs_cols); i++)
+	// isPlaying = true;//dev
+
+	if (isPlaying)
 	{
-		if(CheckCollision(trexCol, cur_obs_cols[i]))
+		for (size_t i = 0; i < _countof(cur_obs_cols); i++)
 		{
-			// e_trex.tid = 32;
-			trex[0].attr2 = 32;
-			// isCrashed = true;
-			// break;
-		}
-		else
-		{
-			trex[0].attr2 = 0;
+			if(CheckCollision(trexCol, cur_obs_cols[i]))
+			{
+				// e_trex.tid = 32;
+				trex[0].attr2 = 32;
+
+				isCrashed = true;
+				isPlaying = false;
+				break;
+			}
+			else
+			{
+				if(isPlaying)
+					trex[0].attr2 = 0;
+			}
 		}
 	}
+	
 
-	if (isCrashed)
+	if (isCrashed || !isPlaying)
 	{
 		gameSpeed = 0;
 	}
@@ -348,16 +370,27 @@ void Update()
 	// player jump
 
 	if(key_hit(KEY_A) && !isJumping)
-		StartJump();
-
-	if (isJumping)
-		UpdateJump();
-
-	if (y >= 140 && isJumping)
 	{
-		y = 140;
-		isJumping = false;
+		StartJump();
+		if(!isPlaying)
+		{
+			Start();
+		}
 	}
+
+	if (isPlaying)
+	{
+		if (isJumping)
+			UpdateJump();
+
+		if (y >= 140 && isJumping)
+		{
+			y = 140;
+			isJumping = false;
+		}
+	}
+	
+
 	
 	obj_set_pos(&trex[0], x + headXOffset + trexXOffset, y + headYOffset + trexYOffset);
 	obj_set_pos(&trex[1], x + trexXOffset, y + trexYOffset);
@@ -384,7 +417,7 @@ void Update()
 		}
 		else
 		{
-			cur_obs[i] -= testSpeed;
+			cur_obs[i] -= gameSpeed;
 		}
 
 		cur_obs_cols[i].x = cur_obs[i];
