@@ -61,9 +61,21 @@ Entity e_trex;
 
 int span = 400;
 int min_span = 2;
-int max_span = 6;
+int max_span = 10;
+
+const int objPosY = 110;
+
 // add random space when go to right
-int cur_obs[4] = {1000, 1700, 3000, 4200};
+// int cur_obs[4] = {300, 600, 1200, 2400};
+u32 cur_obs[4] = {200, 400, 600, 900};
+
+CollisionBox cur_obs_cols[4] = 
+{
+	{0, objPosY - 32, 16, 32},
+	{0, objPosY - 32, 16, 32},
+	{0, objPosY - 32, 16, 32},
+	{0, objPosY - 32, 16, 32}
+};
 
 // empty: 160, 176
 
@@ -184,12 +196,11 @@ int main()
 	
 	REG_DISPCNT = DCNT_MODE0 | DCNT_OBJ | DCNT_OBJ_1D | DCNT_BG0;
 
-// 	REG_DISPCNT= DCNT_MODE0 | DCNT_BG0;
-
-// 	// Init BG 0 for text on screen entries.
-	// tte_init_se_default(0, BG_CBB(0)|BG_SBB(31));
+	// Init BG 0 for text on screen entries.
+	tte_init_se_default(0, BG_CBB(0)|BG_SBB(31));
 
 	// tte_write("#{P:72,64}");		// Goto (72, 64).
+	tte_write("#{P:72,0}");		// Goto (72, 64).
 	// tte_write("Hello World!");		// Print "Hello world!"
 
 	init_sprite();
@@ -239,15 +250,15 @@ void debugTrex()
 	// 	trex[1].attr2 -= 16;
 
 	// if(CheckCollision(*e_trex.col, testCol))
-	if(CheckCollision(trexCol, testCol))
-	{
-		// e_trex.tid = 32;
-		trex[0].attr2 = 32;
-	}
-	else
-	{
-		trex[0].attr2 = 0;
-	}
+	// if(CheckCollision(trexCol, testCol))
+	// {
+	// 	// e_trex.tid = 32;
+	// 	trex[0].attr2 = 32;
+	// }
+	// else
+	// {
+	// 	trex[0].attr2 = 0;
+	// }
 }
 
 void debugObs()
@@ -280,18 +291,50 @@ void UpdateJump()
 
 int last_rnd = 0;
 
+char* devlog;
+int gameTimer = 0;
+
+int body = 0;
+
 void Update()
 {
 	int oamCount = 0;
+
+	gameTimer++;
+
+	// debugTrex();
+	// debugObs();
+
+	for (size_t i = 0; i < _countof(cur_obs_cols); i++)
+	{
+		if(CheckCollision(trexCol, cur_obs_cols[i]))
+		{
+			// e_trex.tid = 32;
+			trex[0].attr2 = 32;
+			// isCrashed = true;
+			// break;
+		}
+		else
+		{
+			trex[0].attr2 = 0;
+		}
+	}
 
 	if (isCrashed)
 	{
 		gameSpeed = 0;
 	}
+	else
+	{
+		if(gameTimer % 15 == 0)
+		{
+			body ^= 1;
+		}
+
+		trex[1].attr2 = 64 + 16 * body;
+	}
 	
 
-	debugTrex();
-	// debugObs();
 
 	// increment/decrement starting tile with R/L
 	// tid += bit_tribool(key_hit(-1), KI_R, KI_L);
@@ -330,29 +373,33 @@ void Update()
 
 	// how to draw trexCol?
 
-	int objPosY = 110;
+	for (size_t i = 0; i < _countof(cur_obs); i++)
+	{
+		if (cur_obs[i] < 0)
+		{
+			int rnd = getRandom(min_span, max_span);
+			// cur_obs[i] = last_rnd + span * rnd;
+			cur_obs[i] += 320;
+			last_rnd = cur_obs[i];
+		}
+		else
+		{
+			cur_obs[i] -= testSpeed;
+		}
+
+		cur_obs_cols[i].x = cur_obs[i];
+	}
+
 	obj_set_pos(&obs_small[0], cur_obs[0], objPosY);
 	obj_set_pos(&obs_small[1], cur_obs[1], objPosY);
 	obj_set_pos(&obs_small[2], cur_obs[2], objPosY);
 	obj_set_pos(&obs_small[3], cur_obs[3], objPosY);
 
-	for (size_t i = 0; i < _countof(cur_obs); i++)
-	{
-		cur_obs[i] -= testSpeed;
-		if (cur_obs[i] < -300)
-		{
-			// cur_obs[i] += 300;
-			// cur_obs[i] += getRandom(min_span, max_span);
-			int rnd = (random() % max_span + min_span);
-			if (rnd < 0)
-				rnd *= -1;
+	itoa(last_rnd, devlog, 10);
+	tte_write(devlog);		// Print "Hello world!"
 
-			cur_obs[i] += 800 + span * (last_rnd + min_span + rnd);
-			last_rnd = rnd;
-		}
-		
-	}
-	
+
+
 
 	oamCount += _countof(obs_small);
 	oam_copy(&obj_buffer[2], obs_small, 4);
@@ -369,6 +416,11 @@ void Update()
 
 	oam_copy(&obj_buffer[oamCount], obs_large, _countof(obs_large));
 	oamCount += _countof(obs_large);
+
+
+
+
+
 
 	// draw all
 	oam_copy(oam_mem, obj_buffer, oamCount);
