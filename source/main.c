@@ -1,19 +1,16 @@
 #include <stdio.h>
-// #include <string.h>
+#include <string.h>
 #include <tonc.h>
 
-// // bg
-// // 맵으로 넣을 때는 sbb 포맷으로
-#include "horizon.h"
+// bg
+// 맵으로 넣을 때는 sbb 포맷으로
 
-// // sprite
-#include "cloud.h"
-#include "obstacle_large_c.h"
-#include "obstacle_small_c.h"
-#include "restart.h"
-#include "trex_c4.h"
+// sprite
+#include "sprite.h"
 
-#include "whitemap.h"
+// #include "whitemap.h"
+
+#define _countof(_Array) (sizeof(_Array) / sizeof(_Array[0]))
 
 typedef struct CollisionBox
 {
@@ -43,38 +40,35 @@ OBJ_ATTR obj_buffer[128];
 
 
 // trex
-int headInc = 16;
-int bodyOffset = 48;
-int bodyInc = 16;
-
-const int tile_trex_offset = trex_c4TilesLen / (8 * 4);
-const int tile_obstacle_small_offset = obstacle_small_cTilesLen / (8 * 4);
-const int tile_obstacle_large_offset = obstacle_large_cTilesLen / (8 * 4);
+const int offMod = 16;
+int bodySprOffset = 16 * 3;
 
 OBJ_ATTR trex[2] = 
 {
-	{ATTR0_SQUARE, ATTR1_SIZE_32x32, 0, 0}, // head
-	{ATTR0_SQUARE, ATTR1_SIZE_32x32, 0, 48} // body
+	{ATTR0_SQUARE, ATTR1_SIZE_32x32, 0, 0}, // head: 0, 16, 32
+	{ATTR0_SQUARE, ATTR1_SIZE_32x32, 0, offMod * 3} // body: 48, 64, 80
 };
 
 OBJ_ATTR obs_small[4] =
 {
-	{ATTR0_TALL, ATTR1_SIZE_16x32, 0, tile_trex_offset + 0},
-	{ATTR0_TALL, ATTR1_SIZE_16x32, 0, tile_trex_offset + 2},
-	{ATTR0_TALL, ATTR1_SIZE_16x32, 0, tile_trex_offset + 4},
-	{ATTR0_TALL, ATTR1_SIZE_16x32, 0, tile_trex_offset + 6}
+	{ATTR0_SQUARE, ATTR1_SIZE_32x32, 0, offMod * 6}, // 96
+	{ATTR0_SQUARE, ATTR1_SIZE_32x32, 0, offMod * 7}, // 112
+	{ATTR0_SQUARE, ATTR1_SIZE_32x32, 0, offMod * 8}, // 128
+	{ATTR0_SQUARE, ATTR1_SIZE_32x32, 0, offMod * 9}  // 144
 };
+
+// empty: 160, 176
 
 OBJ_ATTR obs_large[6] = 
 {
-	{ATTR0_SQUARE, ATTR1_SIZE_32x32, 0, 0},
-	{ATTR0_SQUARE, ATTR1_SIZE_32x32, 0, 48},
+	{ATTR0_SQUARE, ATTR1_SIZE_32x32, 0, offMod * 12}, // 192
+	{ATTR0_SQUARE, ATTR1_SIZE_32x32, 0, offMod * 15},//
 
-	{ATTR0_SQUARE, ATTR1_SIZE_32x32, 0, 16},
-	{ATTR0_SQUARE, ATTR1_SIZE_32x32, 0, 64},
+	{ATTR0_SQUARE, ATTR1_SIZE_32x32, 0, offMod * 13},// 192
+	{ATTR0_SQUARE, ATTR1_SIZE_32x32, 0, offMod * 16},//
 
-	{ATTR0_SQUARE, ATTR1_SIZE_32x32, 0, 32},
-	{ATTR0_SQUARE, ATTR1_SIZE_32x32, 0, 96},
+	{ATTR0_SQUARE, ATTR1_SIZE_32x32, 0, offMod * 14},//
+	{ATTR0_SQUARE, ATTR1_SIZE_32x32, 0, offMod * 17},//
 };
 
 bool isPlaying = false;
@@ -88,11 +82,13 @@ int ground = 140;
 int pal = 0;
 int tid = 0;
 
-int xOffset = -16;
-int yOffset = -28;
+const int trexXOffset = -16;
+const int trexYOffset = -28;
 
-int headXOffset = 10;
-int headYOffset = -32;
+const int headXOffset = 10;
+const int headYOffset = -32;
+
+const int obsLargeYOffset = 32;
 
 // physics
 bool CheckCollision(CollisionBox a, CollisionBox b);
@@ -110,62 +106,28 @@ void Update();
 
 // void GameOver();
 
-// horizon line
-// bg
-void init_bg()
-{
-	// REG_BG0CNT |= BG_CBB(0) | BG_SBB(30) | BG_8BPP | BG_REG_32x32;
-
-	// 빈 구조체 생성이 안됨
-	// memcpy(pal_bg_mem, horizonPal, horizonPalLen);
-	// memcpy(&tile_mem[0][0], horizonTiles, horizonTilesLen);
-	// memcpy(&se_mem[30][0], horizonMetaMap, horizonMetaMapLen);
-
-	memcpy(pal_bg_mem, horizonPal, horizonPalLen);
-	memcpy(&tile_mem[0][0], horizonTiles, horizonTilesLen);
-	memcpy(&se_mem[30][0], horizonMetaMap, horizonMetaMapLen);
-}
-
-void init_trex()
-{
-	memcpy(&tile_mem[4][0], trex_c4Tiles, trex_c4TilesLen);
-	memcpy(pal_obj_mem, trex_c4Pal, trex_c4PalLen);
-
-	trex[1].attr2 = bodyOffset;
-}
-
-void init_cloud()
-{
-	memcpy(&tile_mem[5][0], cloudTiles, cloudTilesLen);
-	memcpy(pal_obj_mem, cloudPal, cloudPalLen);
-}
-
-void init_obstacles()
-{
-	// memcpy(&tile_mem[5][0], obstacle_small_cPal, obstacle_small_cTilesLen);
-	// memcpy(pal_obj_mem, obstacle_small_cPal, obstacle_small_cPalLen); // 팔레트 복사가 필요한지?
-
-	// memcpy(&tile_mem[4][0], obstacle_large_cPal, obstacle_large_cTilesLen);
-	// memcpy(pal_obj_mem, obstacle_large_cPal, obstacle_large_cPalLen);
-
-	// (타일 길이 / 32)를 더하면 이전에 로드한 타일 뒤에 바로 붙일 수 있다.
-	memcpy(&tile_mem[4][tile_trex_offset], obstacle_small_cPal, obstacle_small_cTilesLen);
-	memcpy(&tile_mem[4][tile_trex_offset + tile_obstacle_small_offset], obstacle_large_cPal, obstacle_large_cTilesLen);
-}
-
 void init_sprite()
 {
 	oam_init(obj_buffer, 128);
 
-	init_cloud();
-	init_obstacles();
-	init_trex();
-}
+	memcpy(&tile_mem[4][0], spriteTiles, spriteTilesLen);
+	memcpy(pal_obj_mem, spritePal, spritePalLen);
 
-// player sprite
-void init_player()
-{
+	trex[1].attr2 = bodySprOffset;
 
+	obs_small[0].attr2 = offMod * 6;
+	obs_small[1].attr2 = offMod * 7;
+	obs_small[2].attr2 = offMod * 8;
+	obs_small[3].attr2 = offMod * 9;
+
+	// empty: 160, 176
+
+	obs_large[0].attr2 = offMod * 12;
+	obs_large[1].attr2 = offMod * 15;
+	obs_large[2].attr2 = offMod * 13;
+	obs_large[3].attr2 = offMod * 16;
+	obs_large[4].attr2 = offMod * 14;
+	obs_large[5].attr2 = offMod * 17;
 }
 
 int main()
@@ -174,11 +136,17 @@ int main()
 	irq_init(NULL);
 	irq_add(II_VBLANK, NULL);
 	
-	REG_DISPCNT = DCNT_MODE0 | DCNT_OBJ | DCNT_OBJ_1D;
+	REG_DISPCNT = DCNT_MODE0 | DCNT_OBJ | DCNT_OBJ_1D | DCNT_BG0;
 
-	init_bg();
+// 	REG_DISPCNT= DCNT_MODE0 | DCNT_BG0;
+
+// 	// Init BG 0 for text on screen entries.
+	tte_init_se_default(0, BG_CBB(0)|BG_SBB(31));
+
+	// tte_write("#{P:72,64}");		// Goto (72, 64).
+	// tte_write("Hello World!");		// Print "Hello world!"
+
 	init_sprite();
-	// init_player();
 
 	while(1)
 	{
@@ -186,10 +154,13 @@ int main()
 		key_poll();
 
 		Update();
+
+		tte_write("#{P:72,64}");		// Goto (72, 64).
+		tte_write("Hello World!");		// Print "Hello world!"
+
 	}
 
 	return 0;
-
 }
 
 void debugTrex()
@@ -243,14 +214,12 @@ void UpdateJump()
 	dy += gravity;
 }
 
-// int oamCount = 0;
-
 void Update()
 {
 	int oamCount = 0;
 
 	// debugTrex();
-	debugObs();
+	// debugObs();
 
 	// increment/decrement starting tile with R/L
 	// tid += bit_tribool(key_hit(-1), KI_R, KI_L);
@@ -269,36 +238,36 @@ void Update()
 	if (isJumping)
 		UpdateJump();
 
-	// if(y < 140 && isJumping)
-	// {
-	// 	// y += 1;
-	// }
-	// else
 	if (y >= 140 && isJumping)
 	{
 		y = 140;
 		isJumping = false;
 	}
 	
-	obj_set_pos(&trex[0], x + headXOffset + xOffset, y + headYOffset + yOffset);
-	obj_set_pos(&trex[1], x + xOffset, y + yOffset);
-
-	// draw only trex
-	// oam_copy(oam_mem, trex, 3);	// only need to update one
+	obj_set_pos(&trex[0], x + headXOffset + trexXOffset, y + headYOffset + trexYOffset);
+	obj_set_pos(&trex[1], x + trexXOffset, y + trexYOffset);
 
 	// draw multiple
-	oamCount += 2;
-
-	oam_copy(&obj_buffer[0], trex, 2);
+	oam_copy(&obj_buffer[0], trex, _countof(trex));
+	oamCount += _countof(trex);
 
 	obj_set_pos(&obs_small[0], 100, 40);
 	obj_set_pos(&obs_small[1], 120, 40);
 	obj_set_pos(&obs_small[2], 140, 40);
 	obj_set_pos(&obs_small[3], 160, 40);
 
-	oamCount += 4;
-
+	oamCount += _countof(obs_small);
 	oam_copy(&obj_buffer[2], obs_small, 4);
+
+	obj_set_pos(&obs_large[0], 100, 80);
+	obj_set_pos(&obs_large[1], 100, 80 + obsLargeYOffset);
+	obj_set_pos(&obs_large[2], 140, 80);
+	obj_set_pos(&obs_large[3], 140, 80 + obsLargeYOffset);
+	obj_set_pos(&obs_large[4], 180, 80);
+	obj_set_pos(&obs_large[5], 180, 80 + obsLargeYOffset);
+
+	oam_copy(&obj_buffer[oamCount], obs_large, _countof(obs_large));
+	oamCount += _countof(obs_large);
 
 	// draw all
 	oam_copy(oam_mem, obj_buffer, oamCount);
@@ -313,7 +282,6 @@ bool CheckCollision(CollisionBox a, CollisionBox b)
 
 	return false;	
 }
-
 
 // #include <stdio.h>
 // #include <tonc.h>
